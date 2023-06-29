@@ -1,27 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import Button from '@mui/material/Button';
-import CircularProgress from '@mui/material/CircularProgress';
-import Alert from '@mui/material/Alert';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import Paper from '@mui/material/Paper';
+import { DataGrid } from '@mui/x-data-grid';
+import Swal from 'sweetalert2';
+import { Button, CircularProgress, Paper, TablePagination } from '@mui/material';
+
 
 function MyComponent() {
 	const [updateMessage, setUpdateMessage] = useState('');
 	const [isAnimating, setIsAnimating] = useState(false);
 	const [clickTimestamps, setClickTimestamps] = useState([]);
-	const [updatedCount, setUpdatedCount] = useState(0);
+	const [page, setPage] = useState(0);
+	const [rowsPerPage, setRowsPerPage] = useState(10);
+	const [refreshTable, setRefreshTable] = useState(false);
+	const [isRefreshing, setIsRefreshing] = useState(false);
+	const [searchText, setSearchText] = useState('');
 
 	useEffect(() => {
 		fetchClickTimestamps();
-	}, []);
+	}, [refreshTable]);
 
 	const fetchClickTimestamps = () => {
+		setIsRefreshing(true);
+
 		axios({
 			method: 'post',
 			url: myAjax.ajaxurl,
@@ -38,9 +38,11 @@ function MyComponent() {
 				if (data.success) {
 					setClickTimestamps(data.data);
 				}
+				setIsRefreshing(false);
 			})
 			.catch((error) => {
 				console.log(error);
+				setIsRefreshing(false);
 			});
 	};
 
@@ -48,7 +50,6 @@ function MyComponent() {
 		setUpdateMessage('');
 		setIsAnimating(true);
 
-		// Send AJAX request to update last modified times
 		axios({
 			method: 'post',
 			url: myAjax.ajaxurl,
@@ -65,23 +66,76 @@ function MyComponent() {
 				console.log(data);
 				setTimeout(() => {
 					if (data.success) {
-						setUpdatedCount(data.updatedCount);
 						setUpdateMessage(`Last modified times have been updated for ${data.updatedCount} post(s).`);
+						Swal.fire({
+							icon: 'success',
+							title: 'Success',
+							text: `Last modified times have been updated for ${data.updatedCount} post(s).`,
+						});
 					} else {
 						setUpdateMessage('Error updating last modified times.');
+						Swal.fire({
+							icon: 'error',
+							title: 'Error',
+							text: 'Error updating last modified times.',
+						});
 					}
 					setIsAnimating(false);
-					fetchClickTimestamps(); // Fetch updated click timestamps
-				}, 1000); // Add a delay of 1 second (1000 milliseconds)
+					setRefreshTable(!refreshTable); // Trigger table reload
+				}, 1000);
 			})
 			.catch(() => {
 				setTimeout(() => {
 					setUpdateMessage('Error updating last modified times.');
 					setIsAnimating(false);
-				}, 1000); // Add a delay of 1 second (1000 milliseconds)
+					Swal.fire({
+						icon: 'error',
+						title: 'Error',
+						text: 'Error updating last modified times.',
+					});
+				}, 1000);
 			});
 	};
-	// console.log(clickTimestamps);
+
+	const handleRefresh = () => {
+		setIsRefreshing(true); // Start the loading animation
+		setRefreshTable(!refreshTable);
+
+		// Add a delay of 500 milliseconds before stopping the loading animation
+		setTimeout(() => {
+			setIsRefreshing(false);
+		}, 500);
+
+		setSearchText(''); // Reset search text
+		setPage(0); // Reset page
+		setSortModel([]); // Reset sorting
+	};
+
+	const columns = [
+		{ field: 'id', headerName: 'ID', width: 70 },
+		{ field: 'user_name', headerName: 'User ID', width: 150 },
+		{ field: 'timestamp', headerName: 'Click Timestamp', width: 200 },
+		{ field: 'updatedcount', headerName: 'Updated Counts', width: 200 },
+	];
+
+	const sortedClickTimestamps = [...clickTimestamps].sort((a, b) => b.id - a.id);
+
+	const rows = sortedClickTimestamps.map((timestamp, index) => ({
+		id: sortedClickTimestamps.length - index, // Set the ID in descending order
+		user_name: timestamp.user_name,
+		timestamp: timestamp.timestamp,
+		updatedcount: timestamp.updatedcount,
+	}));
+
+	const handleChangePage = (event, newPage) => {
+		setPage(newPage);
+	};
+
+	const handleChangeRowsPerPage = (event) => {
+		setRowsPerPage(parseInt(event.target.value, 10));
+		setPage(0);
+	};
+
 	return (
 		<div>
 			<h2>My React Component</h2>
@@ -89,39 +143,41 @@ function MyComponent() {
 			<Button variant="contained" color="primary" onClick={handleUpdateClick} disabled={isAnimating}>
 				{isAnimating ? <CircularProgress size={20} color="inherit" /> : 'Update Last Modified'}
 			</Button>
-			{updateMessage && (
-				<Alert severity={updateMessage.includes('Error') ? 'error' : 'success'}>
-					{updateMessage}
-					{updatedCount > 0 && <span> Pages, posts, and CPTs updated: {updatedCount}</span>}
-				</Alert>
-			)}
+			<Button
+				variant="contained"
+				color="secondary"
+				onClick={handleRefresh}
+				disabled={isRefreshing}
+				style={{ marginLeft: '10px' }}
+			>
+				{isRefreshing ? (
+					<div style={{ display: 'flex', alignItems: 'center' }}>
+						<CircularProgress size={20} color="secondary" style={{ marginRight: '5px' }} />
+						<span>Refreshing...</span>
+					</div>
+				) : (
+					<span>Refresh Table</span>
+				)}
+			</Button>
 
-			<TableContainer component={Paper} style={{ marginTop: '20px' }}>
-				<Table>
-					<TableHead>
-						<TableRow>
-							<TableCell>User ID</TableCell>
-							<TableCell>Click Timestamps</TableCell>
-							<TableCell>Updated Counts</TableCell>
-						</TableRow>
-					</TableHead>
-					<TableBody>
-						{clickTimestamps.length > 0 ? (
-							clickTimestamps.map((timestamp, index) => (
-								<TableRow key={index}>
-									<TableCell>{timestamp.user_name}</TableCell>
-									<TableCell>{timestamp.timestamp}</TableCell>
-									<TableCell>{timestamp.updatedcount}</TableCell>
-								</TableRow>
-							))
-						) : (
-							<TableRow>
-								<TableCell colSpan={2}>No click timestamps found.</TableCell>
-							</TableRow>
-						)}
-					</TableBody>
-				</Table>
-			</TableContainer>
+			<div style={{ height: 400, width: '100%', marginTop: '20px' }}>
+				<DataGrid
+					rows={rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)}
+					columns={columns}
+					checkboxSelection
+					hideFooterSelectedRowCount
+					hideFooterPagination
+				/>
+				<TablePagination
+					rowsPerPageOptions={[10, 20, 50]}
+					component="div"
+					count={rows.length}
+					rowsPerPage={rowsPerPage}
+					page={page}
+					onPageChange={handleChangePage}
+					onRowsPerPageChange={handleChangeRowsPerPage}
+				/>
+			</div>
 		</div>
 	);
 }

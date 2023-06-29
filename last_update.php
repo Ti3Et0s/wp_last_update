@@ -169,7 +169,7 @@ function ajax_update_last_modified()
     if ($updated_count > 0) {
         $response = array(
             'success' => true,
-            'updatedCount' => $updated_count,
+            'updatedcount' => $updated_count,
             'message' => "Last modified times have been updated for {$updated_count} item(s).",
             'timestamp' => $current_timestamp
         );
